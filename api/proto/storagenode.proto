@@ -1,0 +1,42 @@
+syntax = "proto3";
+package storagenode;
+option go_package = "dfs/internal/pb/storagenode";
+
+service StorageNode {
+  rpc PutChunk(PutChunkRequest) returns (PutChunkResponse) {}
+  rpc GetChunk(GetChunkRequest) returns (GetChunkResponse) {}
+  rpc DeleteChunk(DeleteChunkRequest) returns (DeleteChunkResponse) {}
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
+}
+
+message PutChunkRequest {
+  string chunk_id = 1;
+  bytes data = 2;
+}
+
+message PutChunkResponse {
+  bool success = 1;
+}
+
+message GetChunkRequest {
+  string chunk_id = 1;
+}
+
+message GetChunkResponse {
+  bytes data = 1;
+}
+
+message DeleteChunkRequest {
+  string chunk_id = 1;
+}
+
+message DeleteChunkResponse {
+  bool success = 1;
+}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  int64 available_space = 1;
+  bool is_healthy = 2;
+}

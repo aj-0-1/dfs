@@ -1,0 +1,35 @@
+syntax = "proto3";
+package coordinator;
+option go_package = "dfs/internal/pb/coordinator";
+
+service Coordinator {
+  rpc UploadFile(stream UploadFileRequest) returns (UploadFileResponse) {}
+  rpc DownloadFile(DownloadFileRequest) returns (stream DownloadFileResponse) {}
+  rpc DeleteFile(DeleteFileRequest) returns (DeleteFileResponse) {}
+}
+
+message UploadFileRequest {
+  string file_name = 1;
+  bytes chunk_data = 2;
+}
+
+message UploadFileResponse {
+  string file_id = 1;
+}
+
+message DownloadFileRequest {
+  string file_id = 1;
+}
+
+message DownloadFileResponse {
+  string file_name = 1;
+  bytes chunk_data = 2;
+}
+
+message DeleteFileRequest {
+  string file_id = 1;
+}
+
+message DeleteFileResponse {
+  bool success = 1;
+}

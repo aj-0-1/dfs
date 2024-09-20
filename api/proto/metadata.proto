@@ -1,0 +1,51 @@
+syntax = "proto3";
+package metadata;
+option go_package = "dfs/internal/pb/metadata";
+
+service MetadataService {
+  rpc SaveFileMetadata(SaveFileMetadataRequest) returns (SaveFileMetadataResponse) {}
+  rpc GetFileMetadata(GetFileMetadataRequest) returns (GetFileMetadataResponse) {}
+  rpc DeleteFileMetadata(DeleteFileMetadataRequest) returns (DeleteFileMetadataResponse) {}
+  rpc UpdateFileMetadata(UpdateFileMetadataRequest) returns (UpdateFileMetadataResponse) {}
+}
+
+message FileMetadata {
+  string file_id = 1;
+  string file_name = 2;
+  int64 file_size = 3;
+  repeated string chunk_ids = 4;
+  string created_at = 5;
+  string updated_at = 6;
+}
+
+message SaveFileMetadataRequest {
+  FileMetadata metadata = 1;
+}
+
+message SaveFileMetadataResponse {
+  bool success = 1;
+}
+
+message GetFileMetadataRequest {
+  string file_id = 1;
+}
+
+message GetFileMetadataResponse {
+  FileMetadata metadata = 1;
+}
+
+message DeleteFileMetadataRequest {
+  string file_id = 1;
+}
+
+message DeleteFileMetadataResponse {
+  bool success = 1;
+}
+
+message UpdateFileMetadataRequest {
+  FileMetadata metadata = 1;
+}
+
+message UpdateFileMetadataResponse {
+  bool success = 1;
+}
