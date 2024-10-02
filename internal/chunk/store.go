@@ -7,8 +7,8 @@ import (
 )
 
 type Store interface {
-	Put(id string, data []byte) error
-	Get(id string) ([]byte, error)
+	Put(id string, data []byte, checksum string) error
+	Get(id string) ([]byte, string, error)
 	Delete(id string) error
 }
 
@@ -23,28 +23,42 @@ func NewDiskStore(baseDir string) (*DiskStore, error) {
 	return &DiskStore{baseDir: baseDir}, nil
 }
 
-func (d *DiskStore) Put(id string, data []byte) error {
+func (d *DiskStore) Put(id string, data []byte, checksum string) error {
 	path := filepath.Join(d.baseDir, id)
 	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("failed to write data chunk to base directory: %w", err)
+		return err
+	}
+	checksumPath := filepath.Join(d.baseDir, id+".checksum")
+
+	if err := os.WriteFile(checksumPath, []byte(checksum), 0644); err != nil {
+		return err
 	}
 	return nil
 }
 
-func (d *DiskStore) Get(id string) ([]byte, error) {
+func (d *DiskStore) Get(id string) ([]byte, string, error) {
 	path := filepath.Join(d.baseDir, id)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get data chunk for id (%s): %w", id, err)
+		return nil, "", err
 	}
-
-	return data, nil
+	checksumPath := filepath.Join(d.baseDir, id+".checksum")
+	checksum, err := os.ReadFile(checksumPath)
+	if err != nil {
+		return nil, "", err
+	}
+	return data, string(checksum), nil
 }
 
 func (d *DiskStore) Delete(id string) error {
 	path := filepath.Join(d.baseDir, id)
 	if err := os.Remove(path); err != nil {
-		return fmt.Errorf("failed to delete data chunk for id (%s): %w", id, err)
+		return err
+	}
+	checksumPath := filepath.Join(d.baseDir, id+".checksum")
+
+	if err := os.Remove(checksumPath); err != nil {
+		return err
 	}
 	return nil
 }

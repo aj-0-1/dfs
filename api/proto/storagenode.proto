@@ -12,6 +12,7 @@ service StorageNode {
 message PutChunkRequest {
   string chunk_id = 1;
   bytes data = 2;
+  string checksum = 3;
 }
 
 message PutChunkResponse {
@@ -24,6 +25,7 @@ message GetChunkRequest {
 
 message GetChunkResponse {
   bytes data = 1;
+  string checksum = 2;
 }
 
 message DeleteChunkRequest {

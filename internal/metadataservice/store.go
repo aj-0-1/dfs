@@ -76,7 +76,10 @@ func (d *DiskStore) Delete(fileID string) error {
 	defer d.mu.Unlock()
 
 	path := filepath.Join(d.baseDir, fileID+".json")
-	return os.Remove(path)
+	if err := os.Remove(path); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (d *DiskStore) List() ([]*FileMetadata, error) {

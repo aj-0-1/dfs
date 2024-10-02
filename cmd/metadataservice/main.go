@@ -5,19 +5,32 @@ import (
 	pb "dfs/internal/pb/metadata"
 	"log"
 	"net"
+	"os"
 
 	"google.golang.org/grpc"
 )
 
 func main() {
-	store, err := metadataservice.NewDiskStore("/tmp/dfs-metadata")
+	log.Println("Starting Metadata Service")
+
+	baseDir := os.Getenv("DFS_METADATA_DIR")
+	if baseDir == "" {
+		baseDir = "/tmp/dfs-metadata"
+	}
+
+	store, err := metadataservice.NewDiskStore(baseDir)
 	if err != nil {
 		log.Fatalf("Failed to create metadata store: %v", err)
 	}
 
 	server := metadataservice.NewServer(store)
 
-	lis, err := net.Listen("tcp", ":50052")
+	port := os.Getenv("DFS_METADATA_PORT")
+	if port == "" {
+		port = "50052"
+	}
+
+	lis, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
@@ -25,7 +38,7 @@ func main() {
 	s := grpc.NewServer()
 	pb.RegisterMetadataServiceServer(s, server)
 
-	log.Println("Starting Metadata gRPC server on :50052")
+	log.Printf("Metadata Service is listening on :%s", port)
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("Failed to serve: %v", err)
 	}

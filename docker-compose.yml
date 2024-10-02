@@ -1,0 +1,72 @@
+version: "3"
+
+services:
+  metadataservice:
+    build:
+      context: .
+      dockerfile: Dockerfile.metadataservice
+    ports:
+      - "50052:50052"
+    volumes:
+      - metadata_data:/tmp/dfs-metadata
+    environment:
+      - DFS_METADATA_DIR=/tmp/dfs-metadata
+      - DFS_METADATA_PORT=50052
+
+  storagenode1:
+    build:
+      context: .
+      dockerfile: Dockerfile.storagenode
+    ports:
+      - "50051:50051"
+    command: ["./storagenode", "-port", "50051"]
+    volumes:
+      - storage_data1:/tmp/dfs-storage-50051
+    environment:
+      - DFS_STORAGE_DIR=/tmp/dfs-storage-50051
+
+  storagenode2:
+    build:
+      context: .
+      dockerfile: Dockerfile.storagenode
+    ports:
+      - "50061:50061"
+    command: ["./storagenode", "-port", "50061"]
+    volumes:
+      - storage_data2:/tmp/dfs-storage-50061
+    environment:
+      - DFS_STORAGE_DIR=/tmp/dfs-storage-50061
+
+  storagenode3:
+    build:
+      context: .
+      dockerfile: Dockerfile.storagenode
+    ports:
+      - "50071:50071"
+    command: ["./storagenode", "-port", "50071"]
+    volumes:
+      - storage_data3:/tmp/dfs-storage-50071
+    environment:
+      - DFS_STORAGE_DIR=/tmp/dfs-storage-50071
+
+  coordinator:
+    build:
+      context: .
+      dockerfile: Dockerfile.coordinator
+    ports:
+      - "50053:50053"
+    depends_on:
+      - metadataservice
+      - storagenode1
+      - storagenode2
+      - storagenode3
+    environment:
+      - DFS_METADATA_ADDR=metadataservice:50052
+      - DFS_STORAGE_ADDRS=storagenode1:50051,storagenode2:50061,storagenode3:50071
+      - DFS_COORDINATOR_PORT=50053
+
+volumes:
+  metadata_data:
+  storage_data1:
+  storage_data2:
+  storage_data3:
