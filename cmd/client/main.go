@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -67,6 +68,8 @@ func uploadFile(client pbcoord.CoordinatorClient, reader *bufio.Reader) {
 	}
 	defer file.Close()
 
+	fileName := filepath.Base(filePath)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
@@ -88,7 +91,7 @@ func uploadFile(client pbcoord.CoordinatorClient, reader *bufio.Reader) {
 		}
 
 		err = stream.Send(&pbcoord.UploadFileRequest{
-			FileName:  filePath,
+			FileName:  fileName,
 			ChunkData: buffer[:n],
 		})
 		if err != nil {
@@ -110,10 +113,29 @@ func downloadFile(client pbcoord.CoordinatorClient, reader *bufio.Reader) {
 	fmt.Print("Enter file ID: ")
 	fileID, err := reader.ReadString('\n')
 	if err != nil {
-		log.Printf("Failed to read string: %v", err)
+		log.Printf("Failed to read file ID: %v", err)
 		return
 	}
 	fileID = strings.TrimSpace(fileID)
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Printf("Failed to get user's home directory: %v", err)
+		return
+	}
+
+	defaultDownloadDir := filepath.Join(homeDir, "Downloads", "DFS")
+
+	fmt.Printf("Enter download path (press Enter for default: %s): ", defaultDownloadDir)
+	downloadPath, err := reader.ReadString('\n')
+	if err != nil {
+		log.Printf("Failed to read download path: %v", err)
+		return
+	}
+	downloadPath = strings.TrimSpace(downloadPath)
+	if downloadPath == "" {
+		downloadPath = defaultDownloadDir
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -126,7 +148,6 @@ func downloadFile(client pbcoord.CoordinatorClient, reader *bufio.Reader) {
 
 	var fileName string
 	var fileData []byte
-
 	for {
 		resp, err := stream.Recv()
 		if err == io.EOF {
@@ -136,20 +157,26 @@ func downloadFile(client pbcoord.CoordinatorClient, reader *bufio.Reader) {
 			log.Printf("Failed to receive chunk: %v", err)
 			return
 		}
-
 		if fileName == "" {
 			fileName = resp.FileName
 		}
 		fileData = append(fileData, resp.ChunkData...)
 	}
 
-	err = os.WriteFile(fileName, fileData, 0644)
+	fullPath := filepath.Join(downloadPath, fileName)
+	err = os.MkdirAll(filepath.Dir(fullPath), 0755)
+	if err != nil {
+		log.Printf("Failed to create directory: %v", err)
+		return
+	}
+
+	err = os.WriteFile(fullPath, fileData, 0644)
 	if err != nil {
 		log.Printf("Failed to write file: %v", err)
 		return
 	}
 
-	fmt.Printf("File downloaded successfully: %s\n", fileName)
+	fmt.Printf("File downloaded successfully: %s\n", fullPath)
 }
 
 func deleteFile(client pbcoord.CoordinatorClient, reader *bufio.Reader) {
