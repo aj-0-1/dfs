@@ -31,3 +31,8 @@ e.g. upload function:
 - server generates a unique chunkId for each chunk and distributes it to a storage node
 - client calls `stream.CloseAndRecv` to finish sending and wait for the response
 - when `stream.Recv` returns `io.EOF`, it saves the metadata and calls `stream.SendAndClose` with the reponse to the client
+
+- when services communicate with each other, they establish client-server relationships, even though they're all part of the backend system
+- for each service (Coordinator, Storage Node, Metadata), the protobuf definitions generate both client and server code.
+- when a service needs to call another service, it uses the generated client code.
+- when a service needs to receive calls, it implements the generated server interface.
