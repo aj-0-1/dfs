@@ -9,11 +9,16 @@ service MetadataService {
   rpc UpdateFileMetadata(UpdateFileMetadataRequest) returns (UpdateFileMetadataResponse) {}
 }
 
+message ChunkInfo {
+    string chunk_id = 1;
+    repeated string node_ids = 2;
+}
+
 message FileMetadata {
   string file_id = 1;
   string file_name = 2;
   int64 file_size = 3;
-  repeated string chunk_ids = 4;
+  repeated ChunkInfo chunks = 4;
   string created_at = 5;
   string updated_at = 6;
 }

@@ -5,15 +5,25 @@ import (
 	"dfs/internal/chunk"
 	pb "dfs/internal/pb/storagenode"
 	"log"
+
+	"github.com/google/uuid"
 )
 
 type Server struct {
 	pb.UnimplementedStorageNodeServer
-	store chunk.Store
+	store  chunk.Store
+	nodeID string
 }
 
 func NewServer(store chunk.Store) *Server {
-	return &Server{store: store}
+	return &Server{
+		store:  store,
+		nodeID: uuid.New().String(),
+	}
+}
+
+func (s *Server) GetNodeID(ctx context.Context, req *pb.GetNodeIDRequest) (*pb.GetNodeIDResponse, error) {
+	return &pb.GetNodeIDResponse{NodeId: s.nodeID}, nil
 }
 
 func (s *Server) PutChunk(ctx context.Context, req *pb.PutChunkRequest) (*pb.PutChunkResponse, error) {

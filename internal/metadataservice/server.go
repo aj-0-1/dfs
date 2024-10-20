@@ -25,9 +25,16 @@ func (s *Server) SaveFileMetadata(ctx context.Context, req *pb.SaveFileMetadataR
 		FileID:    req.Metadata.FileId,
 		FileName:  req.Metadata.FileName,
 		FileSize:  req.Metadata.FileSize,
-		ChunkIDs:  req.Metadata.ChunkIds,
+		Chunks:    make([]ChunkInfo, len(req.Metadata.Chunks)),
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	for i, chunk := range req.Metadata.Chunks {
+		meta.Chunks[i] = ChunkInfo{
+			ChunkID: chunk.ChunkId,
+			NodeIDs: chunk.NodeIds,
+		}
 	}
 
 	if err := s.store.Save(meta); err != nil {
@@ -47,17 +54,24 @@ func (s *Server) GetFileMetadata(ctx context.Context, req *pb.GetFileMetadataReq
 		return nil, status.Errorf(codes.NotFound, "metadata not found: %v", err)
 	}
 
+	pbMeta := &pb.FileMetadata{
+		FileId:    meta.FileID,
+		FileName:  meta.FileName,
+		FileSize:  meta.FileSize,
+		Chunks:    make([]*pb.ChunkInfo, len(meta.Chunks)),
+		CreatedAt: meta.CreatedAt,
+		UpdatedAt: meta.UpdatedAt,
+	}
+
+	for i, chunk := range meta.Chunks {
+		pbMeta.Chunks[i] = &pb.ChunkInfo{
+			ChunkId: chunk.ChunkID,
+			NodeIds: chunk.NodeIDs,
+		}
+	}
+
 	log.Printf("Metadata retrieved successfully for file: %s", req.FileId)
-	return &pb.GetFileMetadataResponse{
-		Metadata: &pb.FileMetadata{
-			FileId:    meta.FileID,
-			FileName:  meta.FileName,
-			FileSize:  meta.FileSize,
-			ChunkIds:  meta.ChunkIDs,
-			CreatedAt: meta.CreatedAt,
-			UpdatedAt: meta.UpdatedAt,
-		},
-	}, nil
+	return &pb.GetFileMetadataResponse{Metadata: pbMeta}, nil
 }
 
 func (s *Server) DeleteFileMetadata(ctx context.Context, req *pb.DeleteFileMetadataRequest) (*pb.DeleteFileMetadataResponse, error) {

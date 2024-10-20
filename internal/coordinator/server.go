@@ -27,7 +27,12 @@ const (
 type Server struct {
 	pbcoord.UnimplementedCoordinatorServer
 	metadataClient pbmeta.MetadataServiceClient
-	storageNodes   []pbstorage.StorageNodeClient
+	storageNodes   []StorageNode
+}
+
+type StorageNode struct {
+	client pbstorage.StorageNodeClient
+	nodeID string
 }
 
 func NewServer(metadataAddr string, storageAddrs []string) (*Server, error) {
@@ -42,13 +47,21 @@ func NewServer(metadataAddr string, storageAddrs []string) (*Server, error) {
 
 	metadataClient := pbmeta.NewMetadataServiceClient(metadataConn)
 
-	var storageNodes []pbstorage.StorageNodeClient
+	var storageNodes []StorageNode
 	for _, addr := range storageAddrs {
 		conn, err := grpc.NewClient(addr, options...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to storage node %s: %v", addr, err)
 		}
-		storageNodes = append(storageNodes, pbstorage.NewStorageNodeClient(conn))
+
+		client := pbstorage.NewStorageNodeClient(conn)
+		resp, err := client.GetNodeID(context.Background(), &pbstorage.GetNodeIDRequest{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get node ID for %s: %v", addr, err)
+		}
+
+		storageNode := StorageNode{client: client, nodeID: resp.NodeId}
+		storageNodes = append(storageNodes, storageNode)
 	}
 
 	return &Server{
@@ -60,7 +73,7 @@ func NewServer(metadataAddr string, storageAddrs []string) (*Server, error) {
 func (s *Server) UploadFile(stream pbcoord.Coordinator_UploadFileServer) error {
 	var fileID, fileName string
 	var fileSize int64
-	var chunks []string
+	var chunkInfos []*pbmeta.ChunkInfo
 
 	for {
 		req, err := stream.Recv()
@@ -78,15 +91,18 @@ func (s *Server) UploadFile(stream pbcoord.Coordinator_UploadFileServer) error {
 			log.Printf("Starting upload for file: %s (ID: %s)", fileName, fileID)
 		}
 
-		chunkID := generateChunkID(fileID, len(chunks))
-		chunks = append(chunks, chunkID)
+		chunkID := generateChunkID(fileID, len(chunkInfos))
+		chunkInfo := &pbmeta.ChunkInfo{
+			ChunkId: chunkID,
+			NodeIds: []string{},
+		}
 
 		checksum := calculateChecksum(req.GetChunkData())
 		log.Printf("Calculated checksum for chunk %s: %s", chunkID, checksum)
 
 		for i := 0; i < replicationFactor; i++ {
-			nodeIndex := (len(chunks) + i) % len(s.storageNodes)
-			_, err = s.storageNodes[nodeIndex].PutChunk(context.Background(), &pbstorage.PutChunkRequest{
+			nodeIndex := (len(chunkInfos) + i) % len(s.storageNodes)
+			_, err = s.storageNodes[nodeIndex].client.PutChunk(context.Background(), &pbstorage.PutChunkRequest{
 				ChunkId:  chunkID,
 				Data:     req.GetChunkData(),
 				Checksum: checksum,
@@ -95,9 +111,12 @@ func (s *Server) UploadFile(stream pbcoord.Coordinator_UploadFileServer) error {
 				log.Printf("Failed to store chunk %s on node %d: %v", chunkID, nodeIndex, err)
 				return status.Errorf(codes.Internal, "failed to store chunk: %v", err)
 			}
+
+			chunkInfo.NodeIds = append(chunkInfo.NodeIds, s.storageNodes[nodeIndex].nodeID)
 			log.Printf("Stored chunk %s on node %d", chunkID, nodeIndex)
 		}
 
+		chunkInfos = append(chunkInfos, chunkInfo)
 		fileSize += int64(len(req.GetChunkData()))
 	}
 
@@ -106,7 +125,7 @@ func (s *Server) UploadFile(stream pbcoord.Coordinator_UploadFileServer) error {
 			FileId:    fileID,
 			FileName:  fileName,
 			FileSize:  fileSize,
-			ChunkIds:  chunks,
+			Chunks:    chunkInfos,
 			CreatedAt: time.Now().UTC().Format(time.RFC3339),
 			UpdatedAt: time.Now().UTC().Format(time.RFC3339),
 		},
@@ -116,7 +135,7 @@ func (s *Server) UploadFile(stream pbcoord.Coordinator_UploadFileServer) error {
 		return status.Errorf(codes.Internal, "failed to save metadata: %v", err)
 	}
 
-	log.Printf("File uploaded successfully. File ID: %s, Size: %d bytes, Chunks: %d", fileID, fileSize, len(chunks))
+	log.Printf("File uploaded successfully. File ID: %s, Size: %d bytes, Chunks: %d", fileID, fileSize, len(chunkInfos))
 	return stream.SendAndClose(&pbcoord.UploadFileResponse{
 		FileId: fileID,
 	})
@@ -135,45 +154,58 @@ func (s *Server) DownloadFile(req *pbcoord.DownloadFileRequest, stream pbcoord.C
 
 	log.Printf("Retrieved metadata for file %s: %+v", req.GetFileId(), metaResp.Metadata)
 
-	for i, chunkID := range metaResp.Metadata.ChunkIds {
-		nodeIndex := i % len(s.storageNodes)
-		chunkResp, err := s.storageNodes[nodeIndex].GetChunk(context.Background(), &pbstorage.GetChunkRequest{
-			ChunkId: chunkID,
-		})
-		if err != nil {
-			log.Printf("Failed to retrieve chunk %s from node %d: %v", chunkID, nodeIndex, err)
-			// Try other replicas if the first attempt fails
-			for j := 1; j < replicationFactor; j++ {
-				nodeIndex = (i + j) % len(s.storageNodes)
-				chunkResp, err = s.storageNodes[nodeIndex].GetChunk(context.Background(), &pbstorage.GetChunkRequest{
-					ChunkId: chunkID,
-				})
-				if err == nil {
+	for _, chunkInfo := range metaResp.Metadata.Chunks {
+		var chunkData []byte
+		var chunkErr error
+
+		for _, nodeID := range chunkInfo.NodeIds {
+			var node *StorageNode
+			for _, n := range s.storageNodes {
+				if n.nodeID == nodeID {
+					node = &n
 					break
 				}
-				log.Printf("Failed to retrieve chunk %s from node %d (attempt %d): %v", chunkID, nodeIndex, j+1, err)
 			}
+			if node == nil {
+				log.Printf("Node %s not found for chunk %s", nodeID, chunkInfo.ChunkId)
+				continue
+			}
+
+			chunkResp, err := node.client.GetChunk(context.Background(), &pbstorage.GetChunkRequest{
+				ChunkId: chunkInfo.ChunkId,
+			})
 			if err != nil {
-				return status.Errorf(codes.Internal, "failed to retrieve chunk: %v", err)
+				log.Printf("Failed to retrieve chunk %s from node %s: %v", chunkInfo.ChunkId, nodeID, err)
+				continue
 			}
+
+			calculatedChecksum := calculateChecksum(chunkResp.Data)
+			if calculatedChecksum != chunkResp.Checksum {
+				log.Printf("Checksum mismatch for chunk %s from node %s", chunkInfo.ChunkId, nodeID)
+				continue
+			}
+
+			chunkData = chunkResp.Data
+			break
 		}
 
-		calculatedChecksum := calculateChecksum(chunkResp.Data)
-		log.Printf("Chunk %s - Stored checksum: %s, Calculated checksum: %s", chunkID, chunkResp.Checksum, calculatedChecksum)
-		if calculatedChecksum != chunkResp.Checksum {
-			log.Printf("Checksum mismatch for chunk %s", chunkID)
-			return status.Errorf(codes.DataLoss, "chunk checksum mismatch for chunk %s", chunkID)
+		if chunkData == nil {
+			chunkErr = fmt.Errorf("failed to retrieve chunk %s from any node", chunkInfo.ChunkId)
+		}
+
+		if chunkErr != nil {
+			return status.Errorf(codes.Internal, "failed to retrieve chunk: %v", chunkErr)
 		}
 
 		err = stream.Send(&pbcoord.DownloadFileResponse{
 			FileName:  metaResp.Metadata.FileName,
-			ChunkData: chunkResp.Data,
+			ChunkData: chunkData,
 		})
 		if err != nil {
-			log.Printf("Failed to send chunk %s to client: %v", chunkID, err)
+			log.Printf("Failed to send chunk %s to client: %v", chunkInfo.ChunkId, err)
 			return status.Errorf(codes.Internal, "failed to send chunk: %v", err)
 		}
-		log.Printf("Sent chunk %s to client", chunkID)
+		log.Printf("Sent chunk %s to client", chunkInfo.ChunkId)
 	}
 
 	log.Printf("File download completed successfully for file ID: %s", req.GetFileId())
@@ -188,15 +220,27 @@ func (s *Server) DeleteFile(ctx context.Context, req *pbcoord.DeleteFileRequest)
 		return nil, status.Errorf(codes.NotFound, "file not found: %v", err)
 	}
 
-	for i, chunkID := range metaResp.Metadata.ChunkIds {
-		for j := 0; j < replicationFactor; j++ {
-			nodeIndex := (i + j) % len(s.storageNodes)
-			_, err := s.storageNodes[nodeIndex].DeleteChunk(ctx, &pbstorage.DeleteChunkRequest{
-				ChunkId: chunkID,
+	for _, chunkInfo := range metaResp.Metadata.Chunks {
+		for _, nodeID := range chunkInfo.NodeIds {
+			var node *StorageNode
+			for _, n := range s.storageNodes {
+				if n.nodeID == nodeID {
+					node = &n
+					break
+				}
+			}
+			if node == nil {
+				log.Printf("Node %s not found for chunk %s", nodeID, chunkInfo.ChunkId)
+				continue
+			}
+			_, err := node.client.DeleteChunk(ctx, &pbstorage.DeleteChunkRequest{
+				ChunkId: chunkInfo.ChunkId,
 			})
 			if err != nil {
-				fmt.Printf("Failed to delete chunk %s from node %d: %v\n", chunkID, nodeIndex, err)
+				log.Printf("Failed to delete chunk %s from node %s: %v", chunkInfo.ChunkId, nodeID, err)
 			}
+
+			log.Printf("Deleted chunk %s from node %s", chunkInfo.ChunkId, nodeID)
 		}
 	}
 

@@ -8,20 +8,24 @@ import (
 	"sync"
 )
 
+type ChunkInfo struct {
+	ChunkID string
+	NodeIDs []string
+}
+
 type FileMetadata struct {
-	FileID    string   `json:"file_id"`
-	FileName  string   `json:"file_name"`
-	FileSize  int64    `json:"file_size"`
-	ChunkIDs  []string `json:"chunk_ids"`
-	CreatedAt string   `json:"created_at"`
-	UpdatedAt string   `json:"updated_at"`
+	FileID    string
+	FileName  string
+	FileSize  int64
+	Chunks    []ChunkInfo
+	CreatedAt string
+	UpdatedAt string
 }
 
 type Store interface {
 	Save(metadata *FileMetadata) error
 	Get(fileID string) (*FileMetadata, error)
 	Delete(fileID string) error
-	List() ([]*FileMetadata, error)
 }
 
 type DiskStore struct {

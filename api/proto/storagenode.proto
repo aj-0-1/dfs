@@ -6,7 +6,7 @@ service StorageNode {
   rpc PutChunk(PutChunkRequest) returns (PutChunkResponse) {}
   rpc GetChunk(GetChunkRequest) returns (GetChunkResponse) {}
   rpc DeleteChunk(DeleteChunkRequest) returns (DeleteChunkResponse) {}
-  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
+  rpc GetNodeID(GetNodeIDRequest) returns (GetNodeIDResponse) {}
 }
 
 message PutChunkRequest {
@@ -36,9 +36,8 @@ message DeleteChunkResponse {
   bool success = 1;
 }
 
-message GetStatusRequest {}
+message GetNodeIDRequest {}
 
-message GetStatusResponse {
-  int64 available_space = 1;
-  bool is_healthy = 2;
+message GetNodeIDResponse {
+  string node_id = 1;
 }

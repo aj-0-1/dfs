@@ -21,7 +21,7 @@ type StorageNodeClient interface {
 	PutChunk(ctx context.Context, in *PutChunkRequest, opts ...grpc.CallOption) (*PutChunkResponse, error)
 	GetChunk(ctx context.Context, in *GetChunkRequest, opts ...grpc.CallOption) (*GetChunkResponse, error)
 	DeleteChunk(ctx context.Context, in *DeleteChunkRequest, opts ...grpc.CallOption) (*DeleteChunkResponse, error)
-	GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*GetStatusResponse, error)
+	GetNodeID(ctx context.Context, in *GetNodeIDRequest, opts ...grpc.CallOption) (*GetNodeIDResponse, error)
 }
 
 type storageNodeClient struct {
@@ -59,9 +59,9 @@ func (c *storageNodeClient) DeleteChunk(ctx context.Context, in *DeleteChunkRequ
 	return out, nil
 }
 
-func (c *storageNodeClient) GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*GetStatusResponse, error) {
-	out := new(GetStatusResponse)
-	err := c.cc.Invoke(ctx, "/storagenode.StorageNode/GetStatus", in, out, opts...)
+func (c *storageNodeClient) GetNodeID(ctx context.Context, in *GetNodeIDRequest, opts ...grpc.CallOption) (*GetNodeIDResponse, error) {
+	out := new(GetNodeIDResponse)
+	err := c.cc.Invoke(ctx, "/storagenode.StorageNode/GetNodeID", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ type StorageNodeServer interface {
 	PutChunk(context.Context, *PutChunkRequest) (*PutChunkResponse, error)
 	GetChunk(context.Context, *GetChunkRequest) (*GetChunkResponse, error)
 	DeleteChunk(context.Context, *DeleteChunkRequest) (*DeleteChunkResponse, error)
-	GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error)
+	GetNodeID(context.Context, *GetNodeIDRequest) (*GetNodeIDResponse, error)
 	mustEmbedUnimplementedStorageNodeServer()
 }
 
@@ -92,8 +92,8 @@ func (UnimplementedStorageNodeServer) GetChunk(context.Context, *GetChunkRequest
 func (UnimplementedStorageNodeServer) DeleteChunk(context.Context, *DeleteChunkRequest) (*DeleteChunkResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteChunk not implemented")
 }
-func (UnimplementedStorageNodeServer) GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetStatus not implemented")
+func (UnimplementedStorageNodeServer) GetNodeID(context.Context, *GetNodeIDRequest) (*GetNodeIDResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetNodeID not implemented")
 }
 func (UnimplementedStorageNodeServer) mustEmbedUnimplementedStorageNodeServer() {}
 
@@ -162,20 +162,20 @@ func _StorageNode_DeleteChunk_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _StorageNode_GetStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetStatusRequest)
+func _StorageNode_GetNodeID_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNodeIDRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(StorageNodeServer).GetStatus(ctx, in)
+		return srv.(StorageNodeServer).GetNodeID(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/storagenode.StorageNode/GetStatus",
+		FullMethod: "/storagenode.StorageNode/GetNodeID",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StorageNodeServer).GetStatus(ctx, req.(*GetStatusRequest))
+		return srv.(StorageNodeServer).GetNodeID(ctx, req.(*GetNodeIDRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -200,8 +200,8 @@ var StorageNode_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _StorageNode_DeleteChunk_Handler,
 		},
 		{
-			MethodName: "GetStatus",
-			Handler:    _StorageNode_GetStatus_Handler,
+			MethodName: "GetNodeID",
+			Handler:    _StorageNode_GetNodeID_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
